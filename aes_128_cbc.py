@@ -1,5 +1,3 @@
-import os
-
 # --- Constants ---
 SBOX = [
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
@@ -32,21 +30,17 @@ def xtime(a):
 
 def gmul(a, b):
     p = 0
-
     for _ in range(8):
         if b & 1:
             p ^= a
-
         a = xtime(a)
         b >>= 1
-
     return p
 
 
 def key_expansion(key):
     RCON = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36]
     ks = list(key)
-
     for i in range(4, 44):
         temp = ks[(i - 1) * 4:i * 4]
         if i % 4 == 0:
@@ -56,7 +50,6 @@ def key_expansion(key):
         prev = ks[(i - 4) * 4:(i - 3) * 4]
         temp = [a ^ b for a, b in zip(temp, prev)]
         ks.extend(temp)
-
     return [ks[i:i + 16] for i in range(0, len(ks), 16)]
 
 
@@ -69,11 +62,13 @@ def inv_sub_bytes(s):
 
 
 def shift_rows(s):
-    return [s[0], s[5], s[10], s[15], s[4], s[9], s[14], s[3], s[8], s[13], s[2], s[7], s[12], s[1], s[6], s[11]]
+    return [s[0], s[5], s[10], s[15], s[4], s[9], s[14], s[3],
+            s[8], s[13], s[2], s[7], s[12], s[1], s[6], s[11]]
 
 
 def inv_shift_rows(s):
-    return [s[0], s[13], s[10], s[7], s[4], s[1], s[14], s[11], s[8], s[5], s[2], s[15], s[12], s[9], s[6], s[3]]
+    return [s[0], s[13], s[10], s[7], s[4], s[1], s[14], s[11],
+            s[8], s[5], s[2], s[15], s[12], s[9], s[6], s[3]]
 
 
 def mix_columns(s):
@@ -102,13 +97,11 @@ def aes_encrypt_block(p, k):
     state = list(p)
     rk = key_expansion(k)
     state = add_round_key(state, rk[0])
-
     for r in range(1, 10):
         state = sub_bytes(state)
         state = shift_rows(state)
         mix_columns(state)
         state = add_round_key(state, rk[r])
-
     state = sub_bytes(state)
     state = shift_rows(state)
     state = add_round_key(state, rk[10])
@@ -121,13 +114,11 @@ def aes_decrypt_block(c, k):
     state = add_round_key(state, rk[10])
     state = inv_shift_rows(state)
     state = inv_sub_bytes(state)
-
     for r in range(9, 0, -1):
         state = add_round_key(state, rk[r])
         inv_mix_columns(state)
         state = inv_shift_rows(state)
         state = inv_sub_bytes(state)
-
     state = add_round_key(state, rk[0])
     return bytes(state)
 
@@ -136,56 +127,48 @@ def aes_decrypt_block(c, k):
 BLOCK_SIZE = 16
 
 
-def pad(msg): pad_len = BLOCK_SIZE - len(msg) % BLOCK_SIZE; return msg + bytes([pad_len] * pad_len)
-
-
-def unpad(p):
-    pad_len = p[-1]
-    return p[:-pad_len] if p[-pad_len:] == bytes([pad_len] * pad_len) else (_ for _ in ()).throw(
-        ValueError("Invalid padding"))
-
-
 def xor_blocks(a, b):
     return bytes(i ^ j for i, j in zip(a, b))
 
 
 def cbc_encrypt(msg, key, iv):
-    msg = pad(msg)
+    if len(msg) % BLOCK_SIZE != 0:
+        raise ValueError("Plaintext length must be a multiple of 16 bytes.")
     blocks = [msg[i:i + BLOCK_SIZE] for i in range(0, len(msg), BLOCK_SIZE)]
     out, prev = b"", iv
-
     for b in blocks:
         enc = aes_encrypt_block(xor_blocks(b, prev), key)
         out += enc
         prev = enc
-
     return out
 
 
 def cbc_decrypt(ct, key, iv):
+    if len(ct) % BLOCK_SIZE != 0:
+        raise ValueError("Ciphertext length must be a multiple of 16 bytes.")
     blocks = [ct[i:i + BLOCK_SIZE] for i in range(0, len(ct), BLOCK_SIZE)]
     out, prev = b"", iv
-
     for b in blocks:
         dec = aes_decrypt_block(b, key)
         out += xor_blocks(dec, prev)
         prev = b
-
-    return unpad(out)
+    return out
 
 
 def main():
-    msg = b"Hello CBC AES! AES-128 CBC works correctly!!!"
-    key = os.urandom(16)
-    iv = os.urandom(16)
+    # Example: match NIST vector
+    key = bytes.fromhex("8809e7dd3a959ee5d8dbb13f501f2274")
+    iv = bytes.fromhex("e5c0bb535d7d54572ad06d170a0e58ae")
+    pt = bytes.fromhex("1fd4ee65603e6130cfc2a82ab3d56c24")
+    expected_ct = bytes.fromhex("b127a5b4c4692d87483db0c3b0d11e64")
 
-    print("[Original]", msg)
-    ct = cbc_encrypt(msg, key, iv)
-    print("[Encrypted]", ct.hex())
-    pt = cbc_decrypt(ct, key, iv)
-    print("[Decrypted]", pt)
+    ct = cbc_encrypt(pt, key, iv)
+    print("Ciphertext:", ct.hex())
+    print("Matches expected:", ct == expected_ct)
+
+    recovered_pt = cbc_decrypt(ct, key, iv)
+    print("Recovered matches original:", recovered_pt == pt)
 
 
-# --- DEMO ---
 if __name__ == "__main__":
     main()
