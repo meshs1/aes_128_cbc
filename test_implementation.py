@@ -1,9 +1,9 @@
 import binascii
 import re
 
-from tqdm import trange, tqdm
+from tqdm import tqdm
 
-from aes_128_cbc import aes_encrypt_block, xor_blocks, aes_decrypt_block
+from aes_128_cbc import cbc_encrypt, cbc_decrypt
 
 
 def parse_rsp(file_path):
@@ -33,44 +33,6 @@ def parse_rsp(file_path):
     return encrypt_cases, decrypt_cases
 
 
-def mct_cbc_encrypt_128(key0, iv0, pt0):
-    key = key0
-    iv = iv0
-    pt_start = pt0
-
-    pt_j = pt_start
-    for j in trange(1000, leave=False):
-        if j == 0:
-            ct_j = aes_encrypt_block(xor_blocks(pt_j, iv), key)
-            pt_j_next = iv
-        else:
-            ct_j = aes_encrypt_block(xor_blocks(pt_j, ct_prev), key)
-            pt_j_next = ct_prev
-        ct_prev = ct_j
-        pt_j = pt_j_next
-
-    return ct_j
-
-
-def mct_cbc_decrypt_128(key0, iv0, ct0):
-    # TODO: Fix
-    key = key0
-    iv = iv0
-    ct_start = ct0
-
-    ct_j = ct_start
-    for j in trange(1000, leave=False):
-        if j == 0:
-            pt_j = aes_decrypt_block(xor_blocks(ct_j, iv), key)
-            ct_j_next = iv
-        else:
-            pt_j = aes_decrypt_block(xor_blocks(ct_j, pt_prev), key)
-            ct_j_next = pt_prev
-        pt_prev = pt_j
-        ct_j = ct_j_next
-
-    return pt_j
-
 def run_tests(encrypt_cases, decrypt_cases):
     for i, case in tqdm(enumerate(encrypt_cases), unit="case", desc="Encrypt tests", total=len(encrypt_cases)):
         key = binascii.unhexlify(case["key"])
@@ -78,8 +40,7 @@ def run_tests(encrypt_cases, decrypt_cases):
         plaintext = binascii.unhexlify(case["plaintext"])
         expected_ct = binascii.unhexlify(case["ciphertext"])
 
-        # ct = cbc_encrypt(plaintext, key, iv)
-        ct = mct_cbc_encrypt_128(key, iv, plaintext)
+        ct = cbc_encrypt(plaintext, key, iv)
 
         if ct != expected_ct:
             tqdm.write(f"Encrypt FAIL at case {i}")
@@ -94,7 +55,7 @@ def run_tests(encrypt_cases, decrypt_cases):
         ciphertext = binascii.unhexlify(case["ciphertext"])
         expected_pt = binascii.unhexlify(case["plaintext"])
 
-        pt = mct_cbc_decrypt_128(key, iv, ciphertext)
+        pt = cbc_decrypt(ciphertext, key, iv)
 
         if pt != expected_pt:
             tqdm.write(f"Decrypt FAIL at case {i}")
@@ -105,5 +66,5 @@ def run_tests(encrypt_cases, decrypt_cases):
 
 
 if __name__ == "__main__":
-    encrypt_data, decrypt_data = parse_rsp("CBCMCT128.rsp")
+    encrypt_data, decrypt_data = parse_rsp("CBCKeySbox128.rsp")
     run_tests(encrypt_data, decrypt_data)
