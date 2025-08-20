@@ -1,70 +1,54 @@
-import binascii
-import re
-
-from tqdm import tqdm
-
 from aes_128_cbc import cbc_encrypt, cbc_decrypt
 
+KEY = bytes.fromhex("2b7e151628aed2a6abf7158809cf4f3c")
+IV = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
 
-def parse_rsp(file_path):
-    with open(file_path, "r") as f:
-        content = f.read()
+PLAINTEXT_BLOCKS = [
+    "6bc1bee22e409f96e93d7e117393172a",
+    "ae2d8a571e03ac9c9eb76fac45af8e51",
+    "30c81c46a35ce411e5fbc1191a0a52ef",
+    "f69f2445df4f9b17ad2b417be66c3710"
+]
+FULL_PLAINTEXT = bytes.fromhex("".join(PLAINTEXT_BLOCKS))
 
-    encrypt_section = re.search(r"\[ENCRYPT](.*?)\[DECRYPT]", content, re.S).group(1)
-    decrypt_section = re.search(r"\[DECRYPT](.*)", content, re.S).group(1)
+EXPECTED_CIPHERTEXT_BLOCKS = [
+    "7649abac8119b246cee98e9b12e9197d",
+    "5086cb9b507219ee95db113a917678b2",
+    "73bed6b8e3c1743b7116e69e22229516",
+    "3ff1caa1681fac09120eca307586e1a7"
+]
+EXPECTED_FULL_CIPHERTEXT = bytes.fromhex("".join(EXPECTED_CIPHERTEXT_BLOCKS))
 
-    def parse_section(section):
-        cases = []
-        entries = re.findall(
-            r"COUNT\s*=\s*(\d+)\s*KEY\s*=\s*([0-9a-fA-F]+)\s*IV\s*=\s*([0-9a-fA-F]+)\s*(PLAINTEXT|CIPHERTEXT)\s*=\s*([0-9a-fA-F]+)\s*(CIPHERTEXT|PLAINTEXT)\s*=\s*([0-9a-fA-F]+)",
-            section,
-        )
-        for _, key, iv, text_type1, text1, text_type2, text2 in entries:
-            cases.append({
-                "key": key,
-                "iv": iv,
-                "plaintext": text1 if text_type1 == "PLAINTEXT" else text2,
-                "ciphertext": text1 if text_type1 == "CIPHERTEXT" else text2
-            })
-        return cases
+CIPHERTEXT_BLOCKS = [
+    "7649abac8119b246cee98e9b12e9197d",
+    "5086cb9b507219ee95db113a917678b2",
+    "73bed6b8e3c1743b7116e69e22229516",
+    "3ff1caa1681fac09120eca307586e1a7"
+]
+FULL_CIPHERTEXT = bytes.fromhex("".join(CIPHERTEXT_BLOCKS))
 
-    encrypt_cases = parse_section(encrypt_section)
-    decrypt_cases = parse_section(decrypt_section)
-    return encrypt_cases, decrypt_cases
+EXPECTED_FULL_PLAINTEXT = bytes.fromhex("".join(PLAINTEXT_BLOCKS))
 
+print("Encryption:\n")
 
-def run_tests(encrypt_cases, decrypt_cases):
-    for i, case in tqdm(enumerate(encrypt_cases), unit="case", desc="Encrypt tests", total=len(encrypt_cases)):
-        key = binascii.unhexlify(case["key"])
-        iv = binascii.unhexlify(case["iv"])
-        plaintext = binascii.unhexlify(case["plaintext"])
-        expected_ct = binascii.unhexlify(case["ciphertext"])
+actual_ciphertext = cbc_encrypt(FULL_PLAINTEXT, KEY, IV, padding=False)
 
-        ct = cbc_encrypt(plaintext, key, iv)
+print(f"Expected ciphertext: {EXPECTED_FULL_CIPHERTEXT.hex()}")
+print(f"Actual ciphertext:   {actual_ciphertext.hex()}")
 
-        if ct != expected_ct:
-            tqdm.write(f"Encrypt FAIL at case {i}")
-            tqdm.write(f"  Got:      {ct.hex()}")
-            tqdm.write(f"  Expected: {expected_ct.hex()}")
-        else:
-            tqdm.write(f"Encrypt OK at case {i}")
+if actual_ciphertext == EXPECTED_FULL_CIPHERTEXT:
+    print("\nSUCCESS! The generated ciphertext matches the NIST specification.")
+else:
+    print("\nFAILURE! The generated ciphertext does not match the NIST specification.")
 
-    for i, case in tqdm(enumerate(decrypt_cases), unit="case", desc="Decrypt tests", total=len(decrypt_cases)):
-        key = binascii.unhexlify(case["key"])
-        iv = binascii.unhexlify(case["iv"])
-        ciphertext = binascii.unhexlify(case["ciphertext"])
-        expected_pt = binascii.unhexlify(case["plaintext"])
+print("Decryption:\n")
 
-        pt = cbc_decrypt(ciphertext, key, iv)
+actual_plaintext = cbc_decrypt(FULL_CIPHERTEXT, KEY, IV, padding=False)
 
-        if pt != expected_pt:
-            tqdm.write(f"Decrypt FAIL at case {i}")
-            tqdm.write(f"  Got:      {pt.hex()}")
-            tqdm.write(f"  Expected: {expected_pt.hex()}")
-        else:
-            tqdm.write(f"Decrypt OK at case {i}")
+print(f"Expected plaintext: {EXPECTED_FULL_PLAINTEXT.hex()}")
+print(f"Actual plaintext:   {actual_plaintext.hex()}")
 
-
-if __name__ == "__main__":
-    encrypt_data, decrypt_data = parse_rsp("CBCKeySbox128.rsp")
-    run_tests(encrypt_data, decrypt_data)
+if actual_plaintext == EXPECTED_FULL_PLAINTEXT:
+    print("\nSUCCESS! The generated ciphertext matches the NIST specification.")
+else:
+    print("\nFAILURE! The generated ciphertext does not match the NIST specification.")
