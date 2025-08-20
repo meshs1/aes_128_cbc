@@ -132,14 +132,15 @@ def xor_blocks(a, b):
     return bytes(i ^ j for i, j in zip(a, b))
 
 
-def cbc_encrypt(msg, key, iv):
-    padding_size = BLOCK_SIZE - (len(msg) % BLOCK_SIZE)
+def cbc_encrypt(msg, key, iv, padding=True):
+    if padding:
+        padding_size = BLOCK_SIZE - (len(msg) % BLOCK_SIZE)
 
-    if padding_size == 0:
-        padding_size = BLOCK_SIZE
+        if padding_size == 0:
+            padding_size = BLOCK_SIZE
 
-    msg += b"1"
-    msg += b"0" * (padding_size - 1)
+        msg += b"1"
+        msg += b"0" * (padding_size - 1)
 
     blocks = [msg[i:i + BLOCK_SIZE] for i in range(0, len(msg), BLOCK_SIZE)]
     out, prev = b"", iv
@@ -150,7 +151,7 @@ def cbc_encrypt(msg, key, iv):
     return out
 
 
-def cbc_decrypt(ct, key, iv):
+def cbc_decrypt(ct, key, iv, padding=True):
     if len(ct) % BLOCK_SIZE != 0:
         raise ValueError("Ciphertext length must be a multiple of 16 bytes.")
     blocks = [ct[i:i + BLOCK_SIZE] for i in range(0, len(ct), BLOCK_SIZE)]
@@ -160,11 +161,12 @@ def cbc_decrypt(ct, key, iv):
         out += xor_blocks(dec, prev)
         prev = b
 
-    try:
-        last_one_index = out.rfind(b'1')
-        return out[:last_one_index]
-    except ValueError:
-        raise ValueError("Decryption failed: Padding marker '1' not found.")
+    if padding:
+        try:
+            last_one_index = out.rfind(b'1')
+            return out[:last_one_index]
+        except ValueError:
+            raise ValueError("Decryption failed: Padding marker '1' not found.")
 
 
 def main():
