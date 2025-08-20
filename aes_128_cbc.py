@@ -167,6 +167,8 @@ def cbc_decrypt(ct, key, iv, padding=True):
             return out[:last_one_index]
         except ValueError:
             raise ValueError("Decryption failed: Padding marker '1' not found.")
+    else:
+        return out
 
 
 def main():
