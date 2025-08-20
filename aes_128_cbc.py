@@ -93,6 +93,7 @@ def add_round_key(s, k):
     return [x ^ y for x, y in zip(s, k)]
 
 
+
 def aes_encrypt_block(p, k):
     state = list(p)
     rk = key_expansion(k)
@@ -132,8 +133,14 @@ def xor_blocks(a, b):
 
 
 def cbc_encrypt(msg, key, iv):
-    if len(msg) % BLOCK_SIZE != 0:
-        raise ValueError("Plaintext length must be a multiple of 16 bytes.")
+    padding_size = BLOCK_SIZE - (len(msg) % BLOCK_SIZE)
+
+    if padding_size == 0:
+        padding_size = BLOCK_SIZE
+
+    msg += b"1"
+    msg += b"0" * (padding_size - 1)
+
     blocks = [msg[i:i + BLOCK_SIZE] for i in range(0, len(msg), BLOCK_SIZE)]
     out, prev = b"", iv
     for b in blocks:
@@ -152,14 +159,19 @@ def cbc_decrypt(ct, key, iv):
         dec = aes_decrypt_block(b, key)
         out += xor_blocks(dec, prev)
         prev = b
-    return out
+
+    try:
+        last_one_index = out.rfind(b'1')
+        return out[:last_one_index]
+    except ValueError:
+        raise ValueError("Decryption failed: Padding marker '1' not found.")
 
 
 def main():
     # Example: match NIST vector
     key = bytes.fromhex("8809e7dd3a959ee5d8dbb13f501f2274")
     iv = bytes.fromhex("e5c0bb535d7d54572ad06d170a0e58ae")
-    pt = bytes.fromhex("1fd4ee65603e6130cfc2a82ab3d56c24")
+    pt = bytes.fromhex("1fd4ee65603e6130cfc2a82ab3d56c2433")
     expected_ct = bytes.fromhex("b127a5b4c4692d87483db0c3b0d11e64")
 
     ct = cbc_encrypt(pt, key, iv)
